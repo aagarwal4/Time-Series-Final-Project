@@ -24,14 +24,14 @@ data <- data[which(is.na(data['Month']) == 0),] #remove blank lines at bottom
 test <- read.csv("/Users/xiaohui/Documents/0_2017_USF/MSAN_604_TS/Final project/test.csv") # 2011, 2012
 ```
 
-# Split data to training(1987-2008) and validation(2009 and 2010)
+#Split data to training(1987-2008) and validation(2009 and 2010)
 ```{r}
 n = nrow(data)
 train <- data[1:(n-24),] # 1987-2008
 valid <- data[(n-23):n,] # 2009-2010
 ```
 
-# Display summary statistics, correlation, and plot
+#Display summary statistics, correlation, and plot
 ```{r}
 summary(data)
 ```

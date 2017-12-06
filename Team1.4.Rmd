@@ -1,0 +1,11 @@
+---
+title: "Canadian National Bankruptcy Rates Forecasting"
+author: "Anant Agarwal, Devin Bowers, Fei Liu, Cara Qin"
+date: "12/8/2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+

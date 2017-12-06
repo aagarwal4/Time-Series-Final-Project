@@ -24,14 +24,14 @@ data <- data[which(is.na(data['Month']) == 0),] #remove blank lines at bottom
 test <- read.csv("/Users/xiaohui/Documents/0_2017_USF/MSAN_604_TS/Final project/test.csv") # 2011, 2012
 ```
 
-## Split data to training(1987-2008) and validation(2009 and 2010)
+### Split data to training(1987-2008) and validation(2009 and 2010)
 ```{r}
 n = nrow(data)
 train <- data[1:(n-24),] # 1987-2008
 valid <- data[(n-23):n,] # 2009-2010
 ```
 
-#Display summary statistics, correlation, and plot
+### Display summary statistics, correlation, and plot
 ```{r}
 summary(data)
 ```
@@ -58,7 +58,7 @@ pairs.panels(data[,-1],
 ```
 
 
-# Data Exploration and transformation: take log; take one ordinary differencing and one seasonal differencing
+### Data Exploration and transformation: take log; take one ordinary differencing and one seasonal differencing
 ```{r, fig.width=10, fig.height=6 }
 y <- ts(train$Bankruptcy_Rate, start = c(1987,1), frequency = 12)
 par(mfrow=c(2,1))
@@ -92,9 +92,9 @@ acf(AP1.12, lag.max = 144)
 pacf(AP1.12, lag.max = 144)
 ```
 
-# Look at ACF and PACF plot to try p, q, P, Q which p<=3, q ~ exponential decay or q <=3, P <=3, Q ~ exponential decay or Q<=3.
+### Look at ACF and PACF plot to try p, q, P, Q which p<=3, q ~ exponential decay or q <=3, P <=3, Q ~ exponential decay or Q<=3.
 
-# Modeling Approach 1: Univariate SARIMA on Backruptcy (log) exhaustive search 
+### Modeling Approach 1: Univariate SARIMA on Backruptcy (log) exhaustive search 
 ```{r}
 y.train <- newy#define response variable in training 
 y.test <- valid$Bankruptcy_Rate#define response variable in validation
@@ -156,7 +156,7 @@ write.csv(models.result, file = "models.result_p3.csv")
 
 ```
 
-# Loglikelihood ratio test to compare models
+### Loglikelihood ratio test to compare models
 ```{r}
 #Function to perform log-likelihood ratio test
 myLRT <- function(m1, m2){
@@ -196,7 +196,7 @@ myLRT(m.df6, m.df7)
 myLRT(m.df7, m.df9)
 ```
 
-# Optimal model for Univariate Sarima
+### Optimal model for Univariate Sarima
 ```{r}
 #optimal.sarima <- arima(y.train, order = c(1,1,2), seasonal = list(order = c(3,1,3), period = 12), method = "CSS-ML")#can't pass levens
 #optimal.sarima <- arima(y.train, order = c(0,1,3), seasonal = list(order = c(2,1,3), period = 12), method = "CSS-ML")
@@ -211,7 +211,7 @@ optimal.sarima$aic
 ```
 
 
-# SARIMA Model residual diagnostic
+### SARIMA Model residual diagnostic
 ```{r}
 e <- optimal.sarima$residuals
 ####(1) test whether residuals have zero mean
@@ -234,7 +234,7 @@ shapiro.test(e)
 
 ```
 
-# Modeling Approch 2: SARIMAX MODEL
+### Modeling Approch 2: SARIMAX MODEL
 ```{r}
 # 1. Add HPI
 m.sax1  <- arima(y.train, order = c(2,1,0), seasonal = list(order = c(3,1,3), period = 12), xreg=   train$House_Price_Index   , method = "CSS-ML")
@@ -314,16 +314,16 @@ m.sax1$loglik
 
 ```
 
-# Choose optimal sarimaX
+### Choose optimal sarimaX
 ```{r}
 optimal.sax <- arima(y.train, order = c(2,1,0), seasonal = list(order = c(3,1,3), period = 12), xreg=   train$Unemployment_Rate   , method = "CSS-ML")
 ```
 
-# Likelihood ratio test: SARIMA VS.SARIMAX
+### Likelihood ratio test: SARIMA VS.SARIMAX
 ```{r}
 myLRT(optimal.sarima, optimal.sax)
 ```
-# SARIMAX Model diagnostic
+### SARIMAX Model diagnostic
 ```{r}
 e <- optimal.sax$residuals
 ####(1) test whether residuals have zero mean
@@ -346,7 +346,7 @@ shapiro.test(e)
 ```
 
 
-# Modeling Approch 3: Vector autoregression
+### Modeling Approch 3: Vector autoregression
 ```{r}
 #Month indicator
 train.sea <- train
@@ -381,7 +381,7 @@ rmse.var <- sqrt(mean( (exp(predict.y[,1]) - y.test)^2))
 rmse.var
 ```
 
-# With season
+### With season
 ```{r}
 # (3) Include seasonal indicators
 vardf <-  data.frame(y.train, subset(train, select = -c(Month, Bankruptcy_Rate)))
@@ -392,7 +392,7 @@ rmse.var <- sqrt(mean( (exp(predict.y[,1]) - y.test)^2))
 rmse.var
 ```
 
-# Choose optiomal VAR(p) model
+### Choose optiomal VAR(p) model
 ```{r}
 vardf <-  data.frame(y.train, subset(train, select = -c(Month, Bankruptcy_Rate)))
 optimal.var<- VAR(y = vardf, ic = 'AIC', lag.max=3)
@@ -437,7 +437,7 @@ shapiro.test(e.br)
 ```
 test for uncorrelatedness doesn't pass.
 
-# Modeling Approch 4: Holt-Winters
+### Modeling Approch 4: Holt-Winters
 ```{r}
 ##Additive Holt-Winters approach
 m_holt_winters <- HoltWinters(x = y.train, seasonal = 'add')
@@ -468,14 +468,14 @@ rmse
 
 
 
-# Choose the final optimal model to forecast bankruptcy in test data
+### Choose the final optimal model to forecast bankruptcy in test data
 
 ```{r}
 # Use all data to train selected SARIMAX model
 optimal.final <- arima(log(data$Bankruptcy_Rate), order = c(2,1,0), seasonal = list(order = c(3,1,3), period = 12), xreg=   data$Unemployment_Rate, method = "CSS-ML")
 ```
 
-# Final Model diagnostic
+### Final Model diagnostic
 ```{r}
 e <- optimal.final$residuals
 ####(1) test whether residuals have zero mean
@@ -497,7 +497,7 @@ qqline(e, col = "red")
 shapiro.test(e) 
 ```
 
-# Forecasting test data
+### Forecasting test data
 ```{r}
 fitted.y <- exp(fitted(optimal.final)) #fitted value
 fitted.y.ts <- ts(fitted.y, start = c(1987,1), frequency = 12)

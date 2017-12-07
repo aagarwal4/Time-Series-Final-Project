@@ -16,12 +16,13 @@ library(MASS)
 library(forecast)
 library(vars)
 library(psych)
+library(xtable)
 ```
 
 ```{r}
-data <- read.csv("/Users/anantagarwal/Desktop/MSAN/Module2/Time_Series/Final Project/train.csv", header = TRUE,sep = ",") # 1987 - 2010
+data <- read.csv("/Users/xiaohui/Documents/0_2017_USF/MSAN_604_TS/Final project/train.csv", header = TRUE,sep = ",") # 1987 - 2010
 data <- data[which(is.na(data['Month']) == 0),] #remove blank lines at bottom
-test <- read.csv("/Users/anantagarwal/Desktop/MSAN/Module2/Time_Series/Final Project/test.csv") # 2011, 2012
+test <- read.csv("/Users/xiaohui/Documents/0_2017_USF/MSAN_604_TS/Final project/test.csv") # 2011, 2012
 ```
 
 ### Split data to training(1987-2008) and validation(2009 and 2010)
@@ -456,8 +457,8 @@ for (i in 1:64) {
   rmse_hw_add <- c(rmse_hw_add, sqrt(mean((y.test - exp(pred_hw_add$mean))^2)))
 }
 
-d <- data.frame(alpha = OrderGrid[,1], beta = OrderGrid[,2], gamma = OrderGrid[,3], rmse_hw_add)
-d[order(d$rmse_hw_add),]
+d_add <- data.frame(alpha = OrderGrid[,1], beta = OrderGrid[,2], gamma = OrderGrid[,3], rmse_hw_add)
+d_add[order(d_add$rmse_hw_add),]
 
 ##Multiplicative Holt-Winters approach
 for (i in 1:64){
@@ -470,10 +471,25 @@ for (i in 1:64) {
   rmse_hw_mult <- c(rmse_hw_mult, sqrt(mean((y.test - exp(pred_hw_mult$mean))^2)))
 }
 
-d <- data.frame(alpha = OrderGrid[,1], beta = OrderGrid[,2], gamma = OrderGrid[,3], rmse_hw_mult)
-d[order(d$rmse_hw_mult),]
+d_mul <- data.frame(alpha = OrderGrid[,1], beta = OrderGrid[,2], gamma = OrderGrid[,3], rmse_hw_mult)
+d_mul[order(d_mul$rmse_hw_mult),]
 ```
 
+### Choose the optimal Holt-Winters model
+```{r}
+##Multiplicative Holt-Winters approach
+optimal.hw <- HoltWinters(x = y.train, alpha = 0.6, beta = 0.6, gamma = 0.8, seasonal = 'mult')
+pred_holt_winters <- forecast(optimal.hw, h = 24, prediction.interval = T, level = 0.95)
+
+#Taking exponential of predictions
+pred_holt_winters$x     <- exp(pred_holt_winters$x)
+pred_holt_winters$mean  <- exp(pred_holt_winters$mean)
+pred_holt_winters$upper <- exp(pred_holt_winters$upper)
+pred_holt_winters$lower <- exp(pred_holt_winters$lower)
+
+rmse <- sqrt(mean((y.test - pred_holt_winters$mean)^2))
+rmse
+```
 
 
 ### Choose the final optimal model to forecast bankruptcy in test data
@@ -484,7 +500,9 @@ optimal.final <- arima(log(data$Bankruptcy_Rate), order = c(2,1,0), seasonal = l
 ```
 
 ### Final Model diagnostic
-```{r}
+```{r,  fig.width=4, fig.height=2}
+par(mfrow=c(1,2))
+
 e <- optimal.final$residuals
 ####(1) test whether residuals have zero mean
 t.test(e)
@@ -494,15 +512,18 @@ abline(h = 0, col = "red", lwd = 2) # plotting a horizontal line at 0
 group <- cut(1:length(e), breaks=3, labels=(1:3))
 leveneTest(e,group) #Levene
 bartlett.test(e,group) #Bartlett 
+
+####(4) test normality
+
+qqnorm(e, main="QQ-plot of Residuals")
+qqline(e, col = "red")
+shapiro.test(e) 
+
+
 ####(3) test uncorrelatedness 
 Box.test(e, type='Ljung-Box', lag = 6)
 Box.test(e, type='Ljung-Box', lag = 7)
 tsdiag(optimal.final)
-####(4) test normality
-par(mfrow=c(1,1))
-qqnorm(e, main="QQ-plot of Residuals")
-qqline(e, col = "red")
-shapiro.test(e) 
 ```
 
 ### Forecasting test data
@@ -534,10 +555,62 @@ legend("topleft",lty=c(1,1),cex=0.8,
 ```
 
 ```{r}
-# Generate forecasting results in table
+# Generate forecasting results in table(Appendix 6.2)
 month <- gsub('.{3}$', '', seq(as.Date("2011/1/1"), by="month", length=24))
 prediction.final <- data.frame(month, c(pred.ts),c(low95.ts),c(upper95.ts))
 colnames(prediction.final) <- c("Month","Prediction","Lower Bound(95%)", "Upper Bound(95%)")
-knitr::kable(prediction.final, digits = 4, align = "r")
+#knitr::kable(prediction.final, digits = 4, align = "r")
+tli.table <- xtable(prediction.final, digits = 4, auto = FALSE)
+print(tli.table, type = "latex",  include.rownames = FALSE)
+```
+
+```{r}
+# Generate prediction(a single column .txt file without header) (submission)
+write.table(prediction.final$Prediction, "Team1.4.txt", sep="\t", col.names = FALSE, row.names = FALSE)
+```
+
+
+
+# Try ensemble 4 optimal models for each approach
+```{r}
+#SARIMA
+optimal.sarima <- arima(y.train, order = c(2,1,0), seasonal = list(order = c(3,1,3), period = 12), method = "CSS-ML")
+y1 <- forecast(object = optimal.sarima, h=24, level = 0.95) #predicted test
+y1.rmse <- sqrt(mean((exp(y1$mean) - y.test)^2)) #test rmse
+y1.rmse
+
+##SARIMAX
+optimal.sax <- arima(y.train, order = c(2,1,0), seasonal = list(order = c(3,1,3), period = 12), xreg=   train$Unemployment_Rate   , method = "CSS-ML")
+y2 <- predict(optimal.sax, n.ahead = 24, newxreg = valid$Unemployment_Rate)#adding external
+y2.rmse <- sqrt(mean((exp(y2$pred) - y.test)^2))
+y2.rmse
+
+##VAR
+vardf <-  data.frame(y.train, subset(train, select = -c(Month, Bankruptcy_Rate)))
+optimal.var<- VAR(y = vardf, ic = 'AIC', lag.max=3)
+test.pred <-predict(optimal.var, n.ahead=24, ci=0.95)
+y3 <- test.pred$fcst$y.train
+y3.rmse <- sqrt(mean( (exp(y3[,1]) - y.test)^2)) 
+y3.rmse
+
+##Holt Winter
+optimal.hw <- HoltWinters(x = y.train, alpha = 0.6, beta = 0.6, gamma = 0.8, seasonal = 'mult')
+y4 <- forecast(optimal.hw, h = 24, prediction.interval = T, level = 0.95)
+y4.rmse <- sqrt(mean((y.test - exp(y4$mean))^2))
+y4.rmse
+# ensemble
+ensemble <- (exp(y1$mean) + exp(y4$mean) + exp(y2$pred) + exp(y3[,1]))/4
+sqrt(mean((ensemble- y.test)^2))
+```
+
+```{r}
+#generate compiled RMSE table in model selection: Figure 3.1
+
+RMSE.table <- data.frame(c("SARIMA(2,1,0)(3,1,3)[12]","SARIMAX(2,1,0)(3,1,3)[12] Unemployment Rate", "VAR(3)", "Holt-Winters"),c(y1.rmse, y2.rmse, y3.rmse, y4.rmse))
+colnames(RMSE.table) <- c("Model","RMSE")
+#knitr::kable(RMSE.table, digits = 4, align = "r")
+tli.table <- xtable(RMSE.table, digits = 4, auto = FALSE)
+print(tli.table, type = "latex",  include.rownames = FALSE)
+```
 ```
 
